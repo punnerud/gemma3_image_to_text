@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Description with Gemma 3</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #666;
+        }
+        .preview-container {
+            position: relative;
+            margin: 20px 0;
+            display: none;
+        }
+        .preview {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border-radius: 5px;
+        }
+        .image-row {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .image-container {
+            flex: 1;
+            text-align: center;
+        }
+        .image-container img {
+            max-width: 200px;  /* Maximum width */
+            max-height: 200px; /* Maximum height */
+            width: auto;
+            height: auto;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            object-fit: contain;
+        }
+        .image-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+        .description {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            display: none;
+        }
+        .marked-text {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border-radius: 5px;
+            display: none;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .marked-text-label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #1976d2;
+        }
+        .description-label {
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #2e7d32;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .error {
+            color: #dc3545;
+            margin-top: 10px;
+            display: none;
+        }
+        .selection-controls {
+            margin-top: 10px;
+            display: none;
+        }
+        .selection-info {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .button:hover {
+            background-color: #0056b3;
+        }
+        .settings-panel {
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            display: none;
+        }
+        .settings-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .settings-row label {
+            margin-right: 10px;
+            min-width: 150px;
+        }
+        .settings-row input {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            width: 80px;
+        }
+        .button.stop {
+            background-color: #dc3545;
+        }
+        .button.stop:hover {
+            background-color: #c82333;
+        }
+        .button.disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Image Description with Gemma 3</h1>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>Click or drag an image here to upload</p>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        </div>
+        
+        <div class="preview-container" id="previewContainer">
+            <img id="previewImage" class="preview" src="" alt="Preview">
+            <canvas id="selectionCanvas"></canvas>
+        </div>
+        
+        <div class="image-row" id="imageRow" style="display: none;">
+            <div class="image-container">
+                <img id="originalImage" src="" alt="Original">
+                <div class="image-label">Original Image with Selection</div>
+            </div>
+            <div class="image-container">
+                <img id="croppedImage" src="" alt="Selected Area">
+                <div class="image-label">Selected Area</div>
+            </div>
+        </div>
+        
+        <div class="selection-controls" id="selectionControls">
+            <button class="button" id="analyzeButton">Analyze Selection</button>
+            <button class="button stop" id="stopButton" style="display: none;">Stop Processing</button>
+            <button class="button" id="resetButton">Reset Selection</button>
+            <button class="button" id="settingsButton">Settings</button>
+        </div>
+        
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-row">
+                <label for="maxDisplaySize">Max Display Size (px):</label>
+                <input type="number" id="maxDisplaySize" min="100" max="1000" value="200">
+            </div>
+            <div class="settings-row">
+                <label for="imageQuality">Image Quality (%):</label>
+                <input type="number" id="imageQuality" min="1" max="100" value="95">
+            </div>
+            <div class="settings-row">
+                <label for="overlayOpacity">Overlay Opacity (%):</label>
+                <input type="number" id="overlayOpacity" min="0" max="100" value="50">
+            </div>
+        </div>
+
+        <div class="selection-info" id="selectionInfo"></div>
+        
+        <div class="marked-text" id="markedText">
+            <div class="marked-text-label">Extracted Text:</div>
+            <div id="markedTextContent"></div>
+        </div>
+        
+        <div class="description" id="description">
+            <div class="description-label">Additional Context:</div>
+            <div id="descriptionContent"></div>
+        </div>
+        
+        <div class="loading" id="loading">
+            Analyzing image...
+        </div>
+        
+        <div class="error" id="error"></div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const previewImage = document.getElementById('previewImage');
+        const canvas = document.getElementById('selectionCanvas');
+        const ctx = canvas.getContext('2d');
+        const selectionControls = document.getElementById('selectionControls');
+        const selectionInfo = document.getElementById('selectionInfo');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const resetButton = document.getElementById('resetButton');
+        const loading = document.getElementById('loading');
+        const error = document.getElementById('error');
+        const settingsButton = document.getElementById('settingsButton');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const maxDisplaySizeInput = document.getElementById('maxDisplaySize');
+        const imageQualityInput = document.getElementById('imageQuality');
+        const overlayOpacityInput = document.getElementById('overlayOpacity');
+        const stopButton = document.getElementById('stopButton');
+
+        let isDrawing = false;
+        let startX, startY;
+        let selection = null;
+        let currentController = null;  // Store the current AbortController
+        let isProcessing = false;
+
+        // Load settings from localStorage
+        let settings = {
+            maxDisplaySize: parseInt(localStorage.getItem('maxDisplaySize')) || 200,
+            imageQuality: parseInt(localStorage.getItem('imageQuality')) || 95,
+            overlayOpacity: parseInt(localStorage.getItem('overlayOpacity')) || 50
+        };
+
+        // Initialize input values
+        maxDisplaySizeInput.value = settings.maxDisplaySize;
+        imageQualityInput.value = settings.imageQuality;
+        overlayOpacityInput.value = settings.overlayOpacity;
+
+        // Save settings when changed
+        maxDisplaySizeInput.addEventListener('change', () => {
+            settings.maxDisplaySize = parseInt(maxDisplaySizeInput.value);
+            localStorage.setItem('maxDisplaySize', settings.maxDisplaySize);
+        });
+
+        imageQualityInput.addEventListener('change', () => {
+            settings.imageQuality = parseInt(imageQualityInput.value);
+            localStorage.setItem('imageQuality', settings.imageQuality);
+        });
+
+        overlayOpacityInput.addEventListener('change', () => {
+            settings.overlayOpacity = parseInt(overlayOpacityInput.value);
+            localStorage.setItem('overlayOpacity', settings.overlayOpacity);
+            if (selection) {
+                drawSelection();
+            }
+        });
+
+        // Toggle settings panel
+        settingsButton.addEventListener('click', () => {
+            settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'block' : 'none';
+        });
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#666';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#ccc';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            const file = e.dataTransfer.files[0];
+            handleFile(file);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            handleFile(file);
+        });
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showError('Please upload an image file');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImage.src = e.target.result;
+                previewImage.onload = () => {
+                    previewContainer.style.display = 'block';
+                    selectionControls.style.display = 'block';
+                    setupCanvas();
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Function to enable/disable analyze button
+        function setProcessingState(processing) {
+            isProcessing = processing;
+            analyzeButton.classList.toggle('disabled', processing);
+            stopButton.style.display = processing ? 'inline-block' : 'none';
+            canvas.style.pointerEvents = processing ? 'none' : 'auto';
+        }
+
+        // Stop button handler
+        stopButton.addEventListener('click', () => {
+            if (currentController) {
+                currentController.abort();
+                currentController = null;
+            }
+            setProcessingState(false);
+            loading.style.display = 'none';
+        });
+
+        // Reset button handler
+        resetButton.addEventListener('click', () => {
+            if (!isProcessing) {
+                setupCanvas();
+            }
+        });
+
+        function setupCanvas() {
+            canvas.width = previewImage.width;
+            canvas.height = previewImage.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            selection = null;
+            updateSelectionInfo(selection, 1);
+            canvas.style.pointerEvents = 'auto';
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!isProcessing) {
+                const rect = canvas.getBoundingClientRect();
+                startX = e.clientX - rect.left;
+                startY = e.clientY - rect.top;
+                isDrawing = true;
+            }
+        });
+
+        function drawSelection() {
+            if (!selection) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                return;
+            }
+
+            // Store the original image data
+            const originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            
+            // Clear and draw semi-transparent white overlay
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(previewImage, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = `rgba(255, 255, 255, ${settings.overlayOpacity / 100})`;
+            
+            // Create clipping path for the non-selected area
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(0, 0, canvas.width, canvas.height);
+            ctx.rect(selection.x, selection.y, selection.width, selection.height);
+            ctx.clip('evenodd');
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+            
+            // Draw red rectangle around selection
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(selection.x, selection.y, selection.width, selection.height);
+        }
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            selection = {
+                x: Math.min(startX, currentX),
+                y: Math.min(startY, currentY),
+                width: Math.abs(currentX - startX),
+                height: Math.abs(currentY - startY)
+            };
+            
+            drawSelection();
+            updateSelectionInfo(selection, 1);
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        function calculateScaledDimensions(width, height, maxSize) {
+            const aspectRatio = width / height;
+            let newWidth, newHeight;
+
+            if (width > height) {
+                newWidth = Math.min(width, maxSize);
+                newHeight = newWidth / aspectRatio;
+            } else {
+                newHeight = Math.min(height, maxSize);
+                newWidth = newHeight * aspectRatio;
+            }
+
+            return {
+                width: Math.round(newWidth),
+                height: Math.round(newHeight)
+            };
+        }
+
+        function createScaledCanvas(sourceCanvas, maxSize) {
+            const dims = calculateScaledDimensions(sourceCanvas.width, sourceCanvas.height, maxSize);
+            const scaledCanvas = document.createElement('canvas');
+            scaledCanvas.width = dims.width;
+            scaledCanvas.height = dims.height;
+            
+            const ctx = scaledCanvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(sourceCanvas, 0, 0, dims.width, dims.height);
+            
+            return scaledCanvas;
+        }
+
+        function updateSelectionInfo(selection, scale) {
+            if (!selection) {
+                selectionInfo.style.display = 'none';
+                return null;
+            }
+            const originalCoords = {
+                x: Math.round(selection.x * scale),
+                y: Math.round(selection.y * scale),
+                width: Math.round(selection.width * scale),
+                height: Math.round(selection.height * scale)
+            };
+            selectionInfo.textContent = `Selection: x=${originalCoords.x}, y=${originalCoords.y}, width=${originalCoords.width}, height=${originalCoords.height}`;
+            selectionInfo.style.display = 'block';
+            return originalCoords;
+        }
+
+        analyzeButton.addEventListener('click', async () => {
+            if (!selection || isProcessing) {
+                return;
+            }
+
+            setProcessingState(true);
+            loading.style.display = 'block';
+            error.style.display = 'none';
+
+            // Calculate scale factor between displayed image and original
+            const scale = previewImage.naturalWidth / previewImage.width;
+            const originalCoords = updateSelectionInfo(selection, scale);
+
+            // Create temporary image to ensure proper loading
+            const img = new Image();
+            img.onload = async () => {
+                try {
+                    // Create marked image (original with red rectangle)
+                    const markedCanvas = document.createElement('canvas');
+                    markedCanvas.width = img.naturalWidth;
+                    markedCanvas.height = img.naturalHeight;
+                    const markedCtx = markedCanvas.getContext('2d');
+                    markedCtx.drawImage(img, 0, 0);
+
+                    // Draw the original image
+                    markedCtx.drawImage(img, 0, 0);
+                    
+                    // Draw semi-transparent white overlay for non-selected area
+                    markedCtx.fillStyle = `rgba(255, 255, 255, ${settings.overlayOpacity / 100})`;
+                    
+                    // Create clipping path for the non-selected area
+                    markedCtx.save();
+                    markedCtx.beginPath();
+                    markedCtx.rect(0, 0, markedCanvas.width, markedCanvas.height);
+                    markedCtx.rect(originalCoords.x, originalCoords.y, originalCoords.width, originalCoords.height);
+                    markedCtx.clip('evenodd');
+                    markedCtx.fillRect(0, 0, markedCanvas.width, markedCanvas.height);
+                    markedCtx.restore();
+                    
+                    // Draw the red selection rectangle
+                    markedCtx.strokeStyle = '#ff0000';
+                    markedCtx.lineWidth = Math.max(4, Math.round(scale * 3));
+                    markedCtx.strokeRect(
+                        originalCoords.x,
+                        originalCoords.y,
+                        originalCoords.width,
+                        originalCoords.height
+                    );
+
+                    // Create cropped image at original resolution
+                    const croppedCanvas = document.createElement('canvas');
+                    croppedCanvas.width = originalCoords.width;
+                    croppedCanvas.height = originalCoords.height;
+                    const croppedCtx = croppedCanvas.getContext('2d');
+                    croppedCtx.drawImage(
+                        img,
+                        originalCoords.x,
+                        originalCoords.y,
+                        originalCoords.width,
+                        originalCoords.height,
+                        0,
+                        0,
+                        originalCoords.width,
+                        originalCoords.height
+                    );
+
+                    // Scale down canvases for display if needed
+                    const displayMarkedCanvas = createScaledCanvas(markedCanvas, settings.maxDisplaySize);
+                    const displayCroppedCanvas = createScaledCanvas(croppedCanvas, settings.maxDisplaySize);
+
+                    // Convert images with high quality
+                    const quality = Math.max(settings.imageQuality / 100, 0.95); // Use at least 95% quality
+                    const markedImage = markedCanvas.toDataURL('image/jpeg', quality);
+                    const croppedImage = croppedCanvas.toDataURL('image/jpeg', quality);
+
+                    // Update the image row with scaled versions
+                    document.getElementById('originalImage').src = displayMarkedCanvas.toDataURL('image/jpeg', quality);
+                    document.getElementById('croppedImage').src = displayCroppedCanvas.toDataURL('image/jpeg', quality);
+                    document.getElementById('imageRow').style.display = 'flex';
+
+                    // Create new AbortController for this request
+                    currentController = new AbortController();
+
+                    // Send full resolution images and original coordinates to server
+                    const response = await fetch('/upload', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            markedImage: markedImage,
+                            croppedImage: croppedImage,
+                            selection: originalCoords
+                        }),
+                        signal: currentController.signal
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Network response was not ok');
+                    }
+
+                    const data = await response.json();
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        const markedTextElement = document.getElementById('markedText');
+                        const markedTextContent = document.getElementById('markedTextContent');
+                        const description = document.getElementById('description');
+                        const descriptionContent = document.getElementById('descriptionContent');
+
+                        if (data.markedText) {
+                            markedTextContent.textContent = data.markedText;
+                            markedTextElement.style.display = 'block';
+                        } else {
+                            markedTextElement.style.display = 'none';
+                        }
+
+                        if (data.description) {
+                            descriptionContent.textContent = data.description;
+                            description.style.display = 'block';
+                        } else {
+                            description.style.display = 'none';
+                        }
+                    }
+                } catch (err) {
+                    if (err.name === 'AbortError') {
+                        showError('Processing was stopped');
+                    } else {
+                        showError('An error occurred while processing the image: ' + err.message);
+                    }
+                } finally {
+                    setProcessingState(false);
+                    loading.style.display = 'none';
+                    currentController = null;
+                }
+            };
+            img.src = previewImage.src;
+        });
+        
+        function showError(message) {
+            error.textContent = message;
+            error.style.display = 'block';
+        }
+    </script>
+</body>
+</html> 
