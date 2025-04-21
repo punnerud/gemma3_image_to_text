@@ -1,54 +1,37 @@
-# Image Description with Gemma 3
+# Gemma 3 Image to Text
 
-This is a simple web application that allows you to upload images and get detailed descriptions using the Gemma 3 27B model.
+A web application that uses Gemma 3 to extract text from images. The application allows you to select a portion of an image and get the text content from that selection.
 
-## Prerequisites
+## Features
 
-1. Make sure you have Ollama installed and running locally
-2. Pull the Gemma 3 model:
-   ```bash
-   ollama pull gemma3:27b-it-qat
-   ```
+- Upload and select portions of images
+- Extract text using Gemma 3
+- Real-time processing time estimation
+- Option to include/exclude context image
+- Progress tracking with countdown timer
+
+## Example
+
+![Example of text extraction](https://punnerud.github.io/gemma3_image_to_text/example.png)
+
+1. Upload an image
+2. Select the area containing text
+3. Choose whether to include context
+4. Click "Analyze Selection" to extract text
 
 ## Setup
 
-1. Create a virtual environment (optional but recommended):
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+1. Clone the repository
+2. Install dependencies
+3. Run the Flask application
+4. Open in browser at `http://localhost:7000`
 
-2. Install the required packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Requirements
 
-## Running the Application
+- Python 3.x
+- Flask
+- Ollama with Gemma 3 model
 
-1. Start the Flask application:
-   ```bash
-   python app.py
-   ```
+## License
 
-2. Open your web browser and navigate to:
-   ```
-   http://localhost:7000
-   ```
-
-## Usage
-
-1. Click on the upload area or drag and drop an image file
-2. The image will be uploaded and processed by the Gemma 3 model
-3. A detailed description of the image will be displayed below
-
-## Supported Image Formats
-
-- PNG
-- JPG/JPEG
-- GIF
-
-## Notes
-
-- Maximum file size is 16MB
-- Images are temporarily stored in the `uploads` directory and automatically deleted after processing
-- The application uses the local Ollama instance running on your machine 
+MIT License 
